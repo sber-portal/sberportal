@@ -1,0 +1,50 @@
+name: installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux-x86_64
+            asset: sberportal-installer-linux-x86_64
+          - os: macos-latest
+            name: macos-arm64
+            asset: sberportal-installer-macos-arm64
+          - os: macos-13
+            name: macos-x86_64
+            asset: sberportal-installer-macos-x86_64
+          - os: windows-latest
+            name: windows-x86_64
+            asset: sberportal-installer-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pyinstaller
+      - name: Build
+        run: pyinstaller --onefile --clean --name sberportal-installer installer/portal_installer.py
+      - name: Rename
+        shell: bash
+        run: mv dist/sberportal-installer* "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.asset }}
